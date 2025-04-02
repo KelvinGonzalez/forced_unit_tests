@@ -34,3 +34,6 @@ def test_calculator_module_exists_and_can_subtract():
 
     # This part ONLY passes on the branch with the subtract function
     assert subtract(10, 3) == 7
+
+    # Passes in both base and main, means test is useless
+    assert subtract(2, 4) == -2
