@@ -6,7 +6,7 @@
       "language_name": "Python",
       "setup_commands": [
         "pip install --upgrade pip",
-        "pip install -r requirements.txt",
+        "if [ -f requirements.txt ]; then pip install -r requirements.txt; fi",
         "pip install pytest"
       ],
       "code_patterns": [
@@ -21,7 +21,9 @@
     },
     {
       "language_name": "JavaScript",
-      "setup_commands": ["npm install"],
+      "setup_commands": [
+        "if [ -f package.json ]; then npm install; else echo 'package.json not found, skipping npm install.'; fi"
+      ],
       "code_patterns": [
         "'src/**/*.js'",
         "'src/**/*.jsx'",
@@ -38,7 +40,9 @@
     },
     {
       "language_name": "Java",
-      "setup_commands": ["./mvnw dependency:resolve"],
+      "setup_commands": [
+        "if [ -x ./mvnw ]; then ./mvnw dependency:resolve; else echo 'mvnw not found or not executable, skipping mvnw command.'; fi"
+      ],
       "code_patterns": ["'src/main/java/**/*.java'"],
       "test_patterns": ["'src/test/java/**/*Test.java'"],
       "run_new_tests_command": "./mvnw test -Dtest={TEST_FILES_PATTERN}",
