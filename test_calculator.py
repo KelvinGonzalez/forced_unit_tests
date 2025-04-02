@@ -2,7 +2,7 @@
 import pytest
 
 # Import the specific functions - NOW INCLUDES subtract
-from calculator import add, subtract
+from calculator import add, subtract, multiply
 
 # We can also just import the module
 import calculator
@@ -37,3 +37,8 @@ def test_calculator_module_exists_and_can_subtract():
 
     # Passes in both base and main, means test is useless
     assert subtract(2, 4) == -2
+
+
+def test_calculator_multiply():
+    assert multiply(3, 6) == 18
+    assert multiply(-2, 6) == -12
