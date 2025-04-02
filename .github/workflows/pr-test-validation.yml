@@ -1,0 +1,187 @@
+# .github/workflows/pr-test-validation.yml
+
+name: PR Test Validation (Multi-Language Configurable - Python Script)
+
+# ==================================================================================
+# == README FIRST! ==
+#
+# This workflow enforces testing rules configured via `.github/project_config.json`.
+# Core logic is in `.github/scripts/validate_pr.py`.
+#
+# Rules Enforced:
+# 1. Direct pushes to 'main' blocked (Requires Branch Protection Rule).
+# 2. Code changes require corresponding test changes (per module in JSON).
+# 3. If tests change:
+#    a) >=1 NEW test must FAIL on 'main'.
+#    b) ALL module tests must PASS on PR branch.
+# 4. Optional Regression: Label 'require-regression' enforces Rule 3b for ALL modules.
+#
+# == STUDENT CONFIGURATION ==
+#
+# 1. Edit `.github/project_config.json`: Define modules, patterns, commands.
+# 2. THIS FILE (`pr-test-validation.yml`):
+#    - Review the "STUDENT ACTION REQUIRED" section below and uncomment appropriate
+#      `actions/setup-<language>` steps if your project modules require them
+#      (check `setup_actions` in the JSON for hints).
+# 3. Add Required Labels (Repo Settings -> Labels):
+#    - `skip-test-validation`: Bypasses all checks.
+#    - `require-regression`: Enforces full regression testing.
+# 4. Edit `.github/scripts/validate_pr.py` (ADVANCED): Only needed for complex
+#    customizations (e.g., adding `{TEST_CLASSES}` placeholder logic).
+#
+# ==================================================================================
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, reopened ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    # Allow bypass label to prevent blocking merge even if script fails
+    continue-on-error: ${{ contains(github.event.pull_request.labels.*.name, 'skip-test-validation') }}
+
+    steps:
+      # Step 0a: Check for Bypass Label (formerly child of prep)
+      - name: Check for Bypass Label
+        id: check_bypass # Changed ID reference point
+        run: |
+          if ${{ contains(github.event.pull_request.labels.*.name, 'skip-test-validation') }}; then
+            echo "::warning::Bypass label found. Validation will be skipped."
+            echo "skipped=true" >> $GITHUB_OUTPUT
+          else
+            echo "No bypass label found. Proceeding with validation."
+            echo "skipped=false" >> $GITHUB_OUTPUT
+          fi
+
+      # Step 0b: Check for Regression Label (formerly child of prep)
+      - name: Check for Regression Label
+        id: check_regression # Changed ID reference point
+        run: |
+          if ${{ contains(github.event.pull_request.labels.*.name, 'require-regression') }}; then
+            echo "Regression label found. Full test suite pass required for all modules."
+            echo "required=true" >> $GITHUB_OUTPUT
+          else
+            echo "No regression label found."
+            echo "required=false" >> $GITHUB_OUTPUT
+          fi
+
+      # Step 1: Checkout PR Code
+      - name: 1. Checkout PR Code
+        id: checkout_code # Added ID for clarity if needed
+        # Use the output from the check_bypass step directly
+        if: steps.check_bypass.outputs.skipped == 'false'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0 # Needed for merge-base and diffing
+
+      # Step 2: Setup Base Environment & Tools
+      - name: 2. Setup Base Environment & Tools
+        id: setup_tools # Added ID for clarity if needed
+        if: steps.check_bypass.outputs.skipped == 'false'
+        run: |
+          echo "Setting up base tools (jq)..."
+          sudo apt-get update && sudo apt-get install -y jq # Install jq for robust JSON handling
+
+      # ---------------------------------------------------------------------
+      # --- STUDENT ACTION REQUIRED: Uncomment Language Setup(s) Below ---
+      # Instructions: Uncomment the setup action steps ('name:', 'uses:', 'with:')
+      # required by your project modules. Check the 'setup_actions' section
+      # in your .github/project_config.json file for guidance.
+      # At least Python setup is needed for the validation script itself.
+      # ---------------------------------------------------------------------
+
+      # Step 2a: Setup Python (Required for Validation Script)
+      - name: Setup Python (Required for Validation Script)
+        id: setup_python # Added ID for clarity if needed
+        if: steps.check_bypass.outputs.skipped == 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10' # Ensure this version matches script needs
+
+      # Step 2b: Example Setup Node.js (Commented Out)
+      # - name: Setup Node.js # Example: Uncomment if needed
+      #   id: setup_node # Added ID for clarity if needed
+      #   if: steps.check_bypass.outputs.skipped == 'false'
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '18' # Adjust version as needed
+      #     # cache: 'npm' # Optional: enable caching
+
+      # Step 2c: Example Setup Java (Commented Out)
+      # - name: Setup Java # Example: Uncomment if needed
+      #   id: setup_java # Added ID for clarity if needed
+      #   if: steps.check_bypass.outputs.skipped == 'false'
+      #   uses: actions/setup-java@v4
+      #   with:
+      #     distribution: 'temurin' # Or another distribution
+      #     java-version: '17' # Adjust version as needed
+      #     # cache: 'maven' # Optional: enable caching
+
+      # --- End Student Action Section ---
+      # ---------------------------------------------------------------------
+
+      # Step 3: Load Config & Run Validation Script
+      - name: 3. Load Config & Run Validation Script
+        id: run_validation
+        if: steps.check_bypass.outputs.skipped == 'false'
+        env:
+          # Pass necessary info derived from GitHub context
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # Use direct output from check_regression step
+          REGRESSION_REQUIRED: ${{ steps.check_regression.outputs.required }}
+          # Standard CI environment variable
+          CI: true
+          # CONFIG_JSON will be set in the run step below
+        run: |
+          echo "Loading and validating config from .github/project_config.json..."
+          # Read config, validate JSON, compact it, and export to ENV
+          export CONFIG_JSON=$(cat .github/project_config.json | jq -c .)
+
+          if [ -z "$CONFIG_JSON" ]; then
+            echo "::error::Failed to read or parse .github/project_config.json using jq."
+            exit 1
+          elif [[ "$CONFIG_JSON" == "null" ]]; then
+             echo "::error::.github/project_config.json content is null or empty after parsing."
+             exit 1
+          fi
+
+          echo "CONFIG_JSON loaded successfully (content omitted for brevity)."
+          # Execute the Python script (it will read CONFIG_JSON from env)
+          python .github/scripts/validate_pr.py
+
+      # Step 4: Final Summary
+      - name: 4. Final Summary
+        id: final_summary # Added ID for clarity if needed
+        # Use always() to ensure this runs even if previous steps fail or are skipped
+        if: always()
+        run: |
+          echo "--------------------- FINAL JOB SUMMARY ---------------------"
+          final_status="PASSED" # Assume success unless proven otherwise
+
+          # Reference output directly from the check_bypass step
+          if [[ "${{ steps.check_bypass.outputs.skipped }}" == "true" ]]; then
+            echo "Status: SKIPPED (Bypass label 'skip-test-validation' applied)"
+            # Ensure check run passes if skipped with continue-on-error
+          elif [[ "${{ job.status }}" == "success" ]]; then
+             # If the job succeeded AND wasn't skipped, the script must have passed.
+             echo "Status: PASSED"
+             echo "All required test validations passed."
+          else
+             # Any other status (failure, cancelled) means validation failed or workflow errored.
+             echo "Status: FAILED (${{ job.status }})" # Include actual job status
+             echo "Reason: Validation failed or workflow error. Check logs above, especially in 'Run Validation Script'."
+             final_status="FAILED"
+          fi
+          echo "-----------------------------------------------------------"
+
+          # If the determined outcome is FAILED and we weren't skipped, ensure the workflow fails.
+          # Reference output directly from the check_bypass step
+          if [[ "$final_status" == "FAILED" && "${{ steps.check_bypass.outputs.skipped }}" == "false" ]]; then
+            echo "Ensuring job exits with failure."
+            # exit 1 # Optionally uncomment to force-fail this specific step too.
+                     # The job status should already be failure, making this often redundant.
+          fi
