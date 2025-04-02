@@ -250,18 +250,46 @@ def main():
         # Rule 3a: Run NEW tests against BASE (main) - Expect Failure
         if module_has_test_changes and not module_failed_this_run:
             log(f"[{module_name}] Checking new tests against base code ({BASE_SHA})...")
-            # Checkout base files temporarily
-            success_checkout_base, _ = run_command(
-                f"git checkout {BASE_SHA} -- .", cwd=GITHUB_WORKSPACE
-            )
+
+            # Prepare list of only changed CODE files to checkout from base
+            code_files_to_checkout_str = ""
+            if changed_code_files:  # Only checkout if code files actually changed
+                code_files_to_checkout_str = " ".join(
+                    [shlex.quote(f) for f in changed_code_files]
+                )
+                log(
+                    f"Temporarily checking out base version of CODE files: {changed_code_files}"
+                )
+                success_checkout_base, _ = run_command(
+                    f"git checkout {BASE_SHA} -- {code_files_to_checkout_str}",
+                    cwd=GITHUB_WORKSPACE,
+                )
+            else:
+                # If only test files changed, no need to checkout base code files
+                log(
+                    "No code files changed in this commit for this module. Running new tests against current PR code (as base)."
+                )
+                success_checkout_base = (
+                    True  # Simulate success as no checkout was needed
+                )
+
             if not success_checkout_base:
                 log(
-                    "Failed to checkout base files. Skipping 'new tests on base' check.",
+                    "Failed to checkout base version of code files. Skipping 'new tests on base' check.",
                     level="error",
                 )
                 overall_failure = True
                 module_failed_this_run = True
+                # Attempt to restore HEAD anyway, just in case some files were checked out partially
+                if code_files_to_checkout_str:
+                    run_command(
+                        f"git checkout {HEAD_SHA} -- {code_files_to_checkout_str}",
+                        cwd=GITHUB_WORKSPACE,
+                        fail_on_error=False,
+                    )  # Best effort restore
             else:
+                # Now run the new test files (which are still the PR version)
+                # against the potentially modified code files (now base version)
                 run_new_cmd_template = module.get("run_new_tests_command")
                 if not run_new_cmd_template:
                     log(
@@ -269,7 +297,6 @@ def main():
                         level="warning",
                     )
                 else:
-                    # Quote file paths properly for shell command substitution
                     test_files_list_str = " ".join(
                         [shlex.quote(f) for f in changed_test_files]
                     )
@@ -288,9 +315,9 @@ def main():
                     # --- End Advanced Placeholder Handling ---
 
                     log(
-                        f"Running new tests for {module_name} against base (expecting failure)..."
+                        f"Running new tests ({changed_test_files}) for {module_name} against base code version (expecting failure)..."
                     )
-                    # We EXPECT failure, so expect_failure=True, but don't fail the script yet (fail_on_error=False)
+                    # Expect failure (non-zero exit code) from test runner
                     success, exit_code = run_command(
                         run_new_cmd,
                         cwd=GITHUB_WORKSPACE,
@@ -298,31 +325,44 @@ def main():
                         fail_on_error=False,
                     )
 
-                    if success:  # Command failed as expected
+                    if success:  # Command returned non-zero as expected
                         log(
                             f"Success: [{module_name}] New tests failed on base code as expected (Exit code {exit_code})."
                         )
                         at_least_one_new_test_failed_on_main = True
-                    else:  # Command passed (unexpectedly) or failed to run
+                    else:  # Command returned zero (tests PASSED unexpectedly) or failed to run
+                        # Treat exit code 0 as the failure condition for this check
+                        if exit_code == 0:
+                            log(
+                                f"[{module_name}] Expected new tests to FAIL on base code, but they PASSED (Exit code 0). This PR may not need the code changes.",
+                                level="error",
+                            )
+                        else:
+                            log(
+                                f"[{module_name}] Test command failed unexpectedly during 'new tests on base' run (Exit code {exit_code}).",
+                                level="error",
+                            )
+                        overall_failure = True
+                        module_failed_this_run = True
+
+                # Restore PR version of CODE files that were checked out from base
+                if (
+                    code_files_to_checkout_str
+                ):  # Only restore if base files were checked out
+                    log(
+                        f"Restoring PR version of code files ({HEAD_SHA}): {changed_code_files}"
+                    )
+                    success_checkout_head, _ = run_command(
+                        f"git checkout {HEAD_SHA} -- {code_files_to_checkout_str}",
+                        cwd=GITHUB_WORKSPACE,
+                    )
+                    if not success_checkout_head:
                         log(
-                            f"[{module_name}] Expected new tests to FAIL on base code, but they passed or command failed (Exit code {exit_code}).",
+                            "CRITICAL: Failed to restore PR version of code files after testing on base!",
                             level="error",
                         )
                         overall_failure = True
-                        module_failed_this_run = True  # Mark module as failed this step
-
-                # Restore PR code files REGARDLESS of test outcome
-                log(f"Restoring PR files ({HEAD_SHA})...")
-                success_checkout_head, _ = run_command(
-                    f"git checkout {HEAD_SHA} -- .", cwd=GITHUB_WORKSPACE
-                )
-                if not success_checkout_head:
-                    log(
-                        "CRITICAL: Failed to restore PR files after testing on base!",
-                        level="error",
-                    )
-                    overall_failure = True  # Critical failure
-                    module_failed_this_run = True  # Ensure module failure
+                        module_failed_this_run = True  # Critical failure
 
         # Rule 3b / Rule 4: Run ALL tests against PR branch - Expect Success
         run_all_cmd = module.get("run_all_tests_command")
