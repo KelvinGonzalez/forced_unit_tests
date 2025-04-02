@@ -33,21 +33,21 @@ name: PR Test Validation (Multi-Language Configurable - Python Script)
 
 on:
   pull_request:
-    branches: [ main ]
-    types: [ opened, synchronize, reopened ]
+    branches: [main]
+    types: [opened, synchronize, reopened]
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     # Allow bypass label to prevent blocking merge even if script fails
-    continue-on-error: ${{ contains(github.event.pull_request.labels.*.name, 'skip-test-validation') }}
+    continue-on-error: ${{ contains(fromJSON(toJSON(github.event.pull_request.labels)).*.name, 'skip-test-validation') }}
 
     steps:
       # Step 0a: Check for Bypass Label (formerly child of prep)
       - name: Check for Bypass Label
         id: check_bypass # Changed ID reference point
         run: |
-          if ${{ contains(github.event.pull_request.labels.*.name, 'skip-test-validation') }}; then
+          if ${{ contains(fromJSON(toJSON(github.event.pull_request.labels)).*.name, 'skip-test-validation') }}; then
             echo "::warning::Bypass label found. Validation will be skipped."
             echo "skipped=true" >> $GITHUB_OUTPUT
           else
@@ -59,7 +59,7 @@ jobs:
       - name: Check for Regression Label
         id: check_regression # Changed ID reference point
         run: |
-          if ${{ contains(github.event.pull_request.labels.*.name, 'require-regression') }}; then
+          if ${{ contains(fromJSON(toJSON(github.event.pull_request.labels)).*.name, 'require-regression') }}; then
             echo "Regression label found. Full test suite pass required for all modules."
             echo "required=true" >> $GITHUB_OUTPUT
           else
@@ -99,7 +99,7 @@ jobs:
         if: steps.check_bypass.outputs.skipped == 'false'
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10' # Ensure this version matches script needs
+          python-version: "3.10" # Ensure this version matches script needs
 
       # Step 2b: Example Setup Node.js (Commented Out)
       # - name: Setup Node.js # Example: Uncomment if needed
