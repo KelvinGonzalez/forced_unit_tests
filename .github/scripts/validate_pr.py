@@ -89,7 +89,7 @@ def get_changed_files(base_sha, head_sha, patterns):
     if not patterns:
         return []
     # Quote each pattern individually before joining
-    pattern_args = " ".join(patterns)
+    pattern_args = " ".join([shlex.quote(p) for p in patterns])
     cmd = f"git diff --name-only --diff-filter=ACMRTUXB {base_sha} {head_sha} -- {pattern_args}"
     log(f"Finding changed files: {cmd}")
     try:
