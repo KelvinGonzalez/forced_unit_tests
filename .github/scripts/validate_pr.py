@@ -27,9 +27,7 @@ def log(message, level="info"):
         print(message, file=sys.stdout)
 
 
-def run_command(
-    command_str, cwd=None, expect_failure=False, fail_on_error=True, env=None
-):
+def run_command(command_str, cwd=None, expect_failure=False, env=None):
     """Runs a shell command, captures output, and checks exit code."""
     log(f"Executing: {command_str}")
     effective_env = {**os.environ, **(env or {})}  # Merge environments
@@ -60,28 +58,19 @@ def run_command(
         )
         expected = "non-zero" if expect_failure else "zero"
 
-        if not success and fail_on_error:
+        if not success:
             log(
                 f"Command failed! Expected exit code {expected}, got {process.returncode}.",
                 level="error",
             )
             return False, process.returncode
-        elif not success:
-            log(
-                f"Command finished with unexpected exit code {process.returncode} (Expected {expected}), but continuing.",
-                level="warning",
-            )
-            return True, process.returncode  # Return True because fail_on_error=False
         else:
             log("Command finished successfully (as expected).")
             return True, process.returncode
 
     except Exception as e:
         log(f"Failed to execute command: {command_str}\nError: {e}", level="error")
-        if fail_on_error:
-            return False, 1  # Indicate failure
-        else:
-            return True, 1  # Continue despite error, return non-zero
+        return False, 1
 
 
 def get_changed_files(base_sha, head_sha, patterns):
@@ -160,10 +149,7 @@ def main():
     log(f"Regression Required: {REGRESSION_REQUIRED}")
 
     # Add workspace to git safe directories (important for actions runner)
-    run_command(
-        f"git config --global --add safe.directory {GITHUB_WORKSPACE}",
-        fail_on_error=True,
-    )
+    run_command(f"git config --global --add safe.directory {GITHUB_WORKSPACE}")
 
     # Calculate merge base ONCE
     merge_base_cmd = f"git merge-base {HEAD_SHA} {BASE_SHA}"
@@ -202,7 +188,7 @@ def main():
         if setup_commands:
             log(f"Running setup commands for {module_name}...")
             for cmd in setup_commands:
-                success, _ = run_command(cmd, cwd=GITHUB_WORKSPACE, fail_on_error=True)
+                success, _ = run_command(cmd, cwd=GITHUB_WORKSPACE)
                 if not success:
                     log(
                         f"Setup failed for module {module_name}. Skipping further validation.",
@@ -285,7 +271,6 @@ def main():
                     run_command(
                         f"git checkout {HEAD_SHA} -- {code_files_to_checkout_str}",
                         cwd=GITHUB_WORKSPACE,
-                        fail_on_error=False,
                     )  # Best effort restore
             else:
                 # Now run the new test files (which are still the PR version)
@@ -319,10 +304,7 @@ def main():
                     )
                     # Expect failure (non-zero exit code) from test runner
                     success, exit_code = run_command(
-                        run_new_cmd,
-                        cwd=GITHUB_WORKSPACE,
-                        expect_failure=True,
-                        fail_on_error=False,
+                        run_new_cmd, cwd=GITHUB_WORKSPACE, expect_failure=True
                     )
 
                     if success:  # Command returned non-zero as expected
@@ -377,12 +359,8 @@ def main():
             log(
                 f"Running ALL tests for {module_name} on PR branch code (expecting success)..."
             )
-            # We expect success here, don't fail script yet (fail_on_error=False)
             success, exit_code = run_command(
-                run_all_cmd,
-                cwd=GITHUB_WORKSPACE,
-                expect_failure=False,
-                fail_on_error=False,
+                run_all_cmd, cwd=GITHUB_WORKSPACE, expect_failure=False
             )
 
             if not success:
