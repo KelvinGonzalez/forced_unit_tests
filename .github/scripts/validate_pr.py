@@ -58,9 +58,9 @@ def run_command(
         success = (expect_failure and process.returncode != 0) or (
             not expect_failure and process.returncode == 0
         )
+        expected = "non-zero" if expect_failure else "zero"
 
         if not success and fail_on_error:
-            expected = "non-zero" if expect_failure else "zero"
             log(
                 f"Command failed! Expected exit code {expected}, got {process.returncode}.",
                 level="error",
