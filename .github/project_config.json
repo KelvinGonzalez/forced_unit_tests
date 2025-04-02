@@ -15,7 +15,7 @@
         ":(exclude)tests/*",
         ":(exclude)**/__pycache__/*"
       ],
-      "test_patterns": ["**/test_*.py", "*test.py", "tests/**/*.py"],
+      "test_patterns": ["test_*.py", "*_test.py", "tests/**/*.py"],
       "run_new_tests_command": "pytest --quiet {TEST_FILES}",
       "run_all_tests_command": "pytest"
     },
