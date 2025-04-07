@@ -32,9 +32,7 @@ name: PR Test Validation (Multi-Language Configurable - Python Script)
 # ==================================================================================
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 jobs:
   validate:
@@ -139,7 +137,7 @@ jobs:
         run: |
           echo "Loading and validating config from .github/project_config.json..."
           # Read config, validate JSON, compact it, and export to ENV
-          export CONFIG_JSON=$(cat .github/project_config.json | jq -c .)
+          export CONFIG_JSON=$(cat .github/project_config_old.json | jq -c .)
 
           if [ -z "$CONFIG_JSON" ]; then
             echo "::error::Failed to read or parse .github/project_config.json using jq."
@@ -151,7 +149,7 @@ jobs:
 
           echo "CONFIG_JSON loaded successfully (content omitted for brevity)."
           # Execute the Python script (it will read CONFIG_JSON from env)
-          python .github/scripts/validate_pr.py
+          python .github/scripts/validate_pr_old.py
 
       # Step 4: Final Summary
       - name: 4. Final Summary
