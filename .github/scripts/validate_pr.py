@@ -270,7 +270,7 @@ def main():
     for module in config["modules"]:
         success = validate_module(module=module, merge_base=merge_base)
         if not success:
-            log(f"FAILURE: Module {module.get("language_name")} failed.")
+            log(f"FAILURE: Module {module.get('language_name')} failed.")
             sys.exit(1)
 
     log("SUCCESS: All modules passed")
