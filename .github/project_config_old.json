@@ -1,0 +1,52 @@
+{
+  "//": "Configuration for the PR Test Validation workflow.",
+  "//": "Define each language/framework used in your project as an object in the 'modules' array.",
+  "modules": [
+    {
+      "language_name": "Python",
+      "setup_commands": [
+        "pip install --upgrade pip",
+        "if [ -f requirements.txt ]; then pip install -r requirements.txt; fi",
+        "pip install pytest"
+      ],
+      "code_patterns": [
+        "*.py",
+        ":(exclude)*test*.py",
+        ":(exclude)tests/*",
+        ":(exclude)**/__pycache__/*"
+      ],
+      "test_patterns": ["test_*.py", "*_test.py", "tests/**/*.py"],
+      "run_new_tests_command": "pytest --quiet {TEST_FILES}",
+      "run_all_tests_command": "pytest"
+    },
+    {
+      "language_name": "JavaScript",
+      "setup_commands": [
+        "if [ -f package.json ]; then npm install; else echo 'package.json not found, skipping npm install.'; fi"
+      ],
+      "code_patterns": [
+        "src/**/*.js",
+        "src/**/*.jsx",
+        ":(exclude)src/**/*.test.js",
+        ":(exclude)src/**/*.spec.js"
+      ],
+      "test_patterns": [
+        "src/**/*.test.js",
+        "src/**/*.spec.js",
+        "tests/**/*.js"
+      ],
+      "run_new_tests_command": "npx jest --findRelatedTests {TEST_FILES}",
+      "run_all_tests_command": "npm test"
+    },
+    {
+      "language_name": "Java",
+      "setup_commands": [
+        "if [ -x ./mvnw ]; then ./mvnw dependency:resolve; else echo 'mvnw not found or not executable, skipping mvnw command.'; fi"
+      ],
+      "code_patterns": ["src/main/java/**/*.java"],
+      "test_patterns": ["src/test/java/**/*Test.java"],
+      "run_new_tests_command": "./mvnw test -Dtest={TEST_FILES_PATTERN}",
+      "run_all_tests_command": "./mvnw test"
+    }
+  ]
+}
