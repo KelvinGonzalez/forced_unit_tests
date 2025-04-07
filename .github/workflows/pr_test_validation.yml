@@ -1,0 +1,38 @@
+name: PR Test Validation
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Checkout PR Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: 2. Setup Python (Required for Validation Script)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+        # ---------------------------------------------------------------------
+        # --- STUDENT ACTION REQUIRED: Add necessary actions below ---
+        # Instructions: Search the GitHub Actions marketplace to find what
+        # action is necessary to configure your project's languages.
+        # At least Python setup is needed for the validation script itself.
+        # ---------------------------------------------------------------------
+
+      - name: 3. Load Config & Run Validation Script
+        id: run_validation
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          LABELS: ${{ fromJSON(toJSON(github.event.pull_request.labels)) }}
+        run: python .github/scripts/validate_pr.py
