@@ -34,5 +34,5 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          LABELS: ${{ fromJSON(toJSON(github.event.pull_request.labels)) }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels) }}
         run: python .github/scripts/validate_pr.py
