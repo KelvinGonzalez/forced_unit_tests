@@ -92,9 +92,13 @@ def get_changed_files(base_sha, head_sha, patterns):
         return None
 
 
-def validate_module(
-    module: dict, merge_base: str, require_regression: bool = False
-) -> bool:
+def validate_module(module: dict, merge_base: str, labels: list[str] = None) -> bool:
+    if not labels:
+        labels = []
+
+    require_regression = "require-regression" in labels
+    skip_base_must_fail = "skip-base-must-fail" in labels
+
     module_name = module.get("language_name")
     log(f"\n--- Validating Module: {module_name} ---")
 
@@ -136,9 +140,12 @@ def validate_module(
     if has_code_changes and not has_test_changes:
         log(f"Detected changed code files but no tests.", level="error")
         return False
+    
+    # Code from here onwards will only run if there are test changes or if regression is required
 
     # Rule 2: At least *1* test file must fail when run on base branch
-    if has_code_changes and has_test_changes:
+    # Skip if PR includes label
+    if not skip_base_must_fail and has_test_changes:
         code_files_to_checkout = " ".join([shlex.quote(f) for f in changed_code_files])
         log(
             f"Temporarily checking out base version of CODE files: {changed_code_files}"
@@ -226,7 +233,6 @@ def main():
     labels = [label["name"].lower() for label in json.loads(LABELS)]
 
     skip_test_validation = "skip-test-validation" in labels
-    require_regression = "require-regression" in labels
 
     if skip_test_validation:
         log("This PR does not require test validation. Skipping...")
@@ -272,7 +278,7 @@ def main():
         sys.exit(1)
 
     for module in config["modules"]:
-        success = validate_module(module=module, merge_base=merge_base)
+        success = validate_module(module=module, merge_base=merge_base, labels=labels)
         if not success:
             log(f"FAILURE: Module {module.get('language_name')} failed.")
             sys.exit(1)
