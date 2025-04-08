@@ -92,7 +92,13 @@ def get_changed_files(base_sha, head_sha, patterns):
         return None
 
 
-def validate_module(module: dict, merge_base: str) -> bool:
+def validate_module(module: dict, merge_base: str, labels: list[str] = None) -> bool:
+    if not labels:
+        labels = []
+
+    require_regression = "require-regression" in labels
+    skip_base_must_fail = "skip-base-must-fail" in labels
+
     module_name = module.get("language_name")
     log(f"\n--- Validating Module: {module_name} ---")
 
@@ -124,16 +130,22 @@ def validate_module(module: dict, merge_base: str) -> bool:
     has_test_changes = bool(changed_test_files)
 
     if not has_code_changes and not has_test_changes:
-        log("No code or test changes detected. Skipping module...")
-        return True  # Fix for regression testing
+        if not require_regression:
+            log("No code or test changes detected. Skipping module...")
+            return True
+        else:
+            log("No code or test changes detected, however regression is required")
 
     # Rule 1: ALL code changes must have tests
     if has_code_changes and not has_test_changes:
         log(f"Detected changed code files but no tests.", level="error")
         return False
+    
+    # Code from here onwards will only run if there are test changes or if regression is required
 
     # Rule 2: At least *1* test file must fail when run on base branch
-    if has_code_changes and has_test_changes:
+    # Skip if PR includes label
+    if not skip_base_must_fail and has_test_changes:
         code_files_to_checkout = " ".join([shlex.quote(f) for f in changed_code_files])
         log(
             f"Temporarily checking out base version of CODE files: {changed_code_files}"
@@ -218,12 +230,9 @@ def main():
         )
         sys.exit(1)
 
-    print(LABELS)
-    labels = json.loads(LABELS)
-    print(labels)
+    labels = [label["name"].lower() for label in json.loads(LABELS)]
 
-    skip_test_validation = False
-    require_regression = False
+    skip_test_validation = "skip-test-validation" in labels
 
     if skip_test_validation:
         log("This PR does not require test validation. Skipping...")
@@ -244,6 +253,7 @@ def main():
 
     log(f"Base SHA: {BASE_SHA}")
     log(f"Head SHA: {HEAD_SHA}")
+    log(f"Labels: {labels}")
 
     # Add workspace to git safe directories (important for actions runner)
     run_command(f"git config --global --add safe.directory {GITHUB_WORKSPACE}")
@@ -268,7 +278,7 @@ def main():
         sys.exit(1)
 
     for module in config["modules"]:
-        success = validate_module(module=module, merge_base=merge_base)
+        success = validate_module(module=module, merge_base=merge_base, labels=labels)
         if not success:
             log(f"FAILURE: Module {module.get('language_name')} failed.")
             sys.exit(1)
