@@ -92,7 +92,9 @@ def get_changed_files(base_sha, head_sha, patterns):
         return None
 
 
-def validate_module(module: dict, merge_base: str) -> bool:
+def validate_module(
+    module: dict, merge_base: str, require_regression: bool = False
+) -> bool:
     module_name = module.get("language_name")
     log(f"\n--- Validating Module: {module_name} ---")
 
@@ -124,8 +126,11 @@ def validate_module(module: dict, merge_base: str) -> bool:
     has_test_changes = bool(changed_test_files)
 
     if not has_code_changes and not has_test_changes:
-        log("No code or test changes detected. Skipping module...")
-        return True  # Fix for regression testing
+        if not require_regression:
+            log("No code or test changes detected. Skipping module...")
+            return True
+        else:
+            log("No code or test changes detected, however regression is required")
 
     # Rule 1: ALL code changes must have tests
     if has_code_changes and not has_test_changes:
@@ -218,12 +223,10 @@ def main():
         )
         sys.exit(1)
 
-    print(LABELS)
-    labels = json.loads(LABELS)
-    print(labels)
+    labels = [label["name"].lower() for label in json.loads(LABELS)]
 
-    skip_test_validation = False
-    require_regression = False
+    skip_test_validation = "skip-test-validation" in labels
+    require_regression = "require-regression" in labels
 
     if skip_test_validation:
         log("This PR does not require test validation. Skipping...")
@@ -244,6 +247,7 @@ def main():
 
     log(f"Base SHA: {BASE_SHA}")
     log(f"Head SHA: {HEAD_SHA}")
+    log(f"Labels: {labels}")
 
     # Add workspace to git safe directories (important for actions runner)
     run_command(f"git config --global --add safe.directory {GITHUB_WORKSPACE}")
