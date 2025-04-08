@@ -102,21 +102,6 @@ def validate_module(module: dict, merge_base: str, labels: list[str] = None) -> 
     module_name = module.get("language_name")
     log(f"\n--- Validating Module: {module_name} ---")
 
-    # Run setup commands for this module
-    setup_commands = module.get("setup_commands", [])
-    if setup_commands:
-        log(f"Running setup commands for {module_name}...")
-        for cmd in setup_commands:
-            success, _ = run_command(cmd)
-            if not success:
-                log(
-                    f"Setup failed for module {module_name}. Skipping further validation.",
-                    level="error",
-                )
-                return False
-    else:
-        log("No setup commands defined.")
-
     # Get changed files
     code_patterns = module.get("code_patterns", [])
     test_patterns = module.get("test_patterns", [])
@@ -142,6 +127,21 @@ def validate_module(module: dict, merge_base: str, labels: list[str] = None) -> 
         return False
     
     # Code from here onwards will only run if there are test changes or if regression is required
+
+    # Run setup commands for this module
+    setup_commands = module.get("setup_commands", [])
+    if setup_commands:
+        log(f"Running setup commands for {module_name}...")
+        for cmd in setup_commands:
+            success, _ = run_command(cmd)
+            if not success:
+                log(
+                    f"Setup failed for module {module_name}. Skipping further validation.",
+                    level="error",
+                )
+                return False
+    else:
+        log("No setup commands defined.")
 
     # Rule 2: At least *1* test file must fail when run on base branch
     # Skip if PR includes label
